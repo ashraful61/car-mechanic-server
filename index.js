@@ -17,32 +17,36 @@ const client = new MongoClient(uri, {
   serverApi: ServerApiVersion.v1,
 });
 
+
+function verifyJwtToken(req, res, next){
+  const authHeader = req.headers.authorization;
+
+  if(!authHeader){
+      return res.status(401).send({message: 'unauthorized access'});
+  }
+  const token = authHeader.split(' ')[1];
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function(err, decoded){
+      if(err){
+          return res.status(403).send({message: 'Forbidden access'});
+      }
+      req.decoded = decoded;
+      next();
+  })
+}
+
 const run = async () => {
   try {
     const db = client.db("carMechanic");
     const serviceCollection = db.collection("services");
     const orderCollection = db.collection("orders");
 
-    const verifyJwtToken = (req, res, next) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        res.status(401).send({ message: "Unauthorized access" });
-      }
 
-      const token = authHeader.split(" ")[1];
-      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-        if (err) {
-          res.status(401).send({ message: "Unauthorized access" });
-        }
-        req.decoded = decoded;
-        next();
-      });
-    };
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "1h",
+        expiresIn: "1d",
       });
       res.send({ token });
     });
@@ -81,12 +85,14 @@ const run = async () => {
     });
 
     app.post("/orders", verifyJwtToken, async (req, res) => {
+    
       const order = req.body;
       const result = await orderCollection.insertOne(order);
       res.send(result);
     });
 
     app.patch("/orders/:id", verifyJwtToken, async (req, res) => {
+    
       const id = req.params.id;
       const query = { _id: ObjectId(id) };
       const status = req.body.status;
@@ -100,6 +106,7 @@ const run = async () => {
     });
 
     app.delete("/orders/:id", verifyJwtToken, async (req, res) => {
+   
       const id = req.params.id;
       const query = { _id: ObjectId(id) };
       const result = await orderCollection.deleteOne(query);
